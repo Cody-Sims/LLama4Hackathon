@@ -1,0 +1,2 @@
+v1 - 31 seconds
+v2 (faster-whisper) - 4.5 seconds
