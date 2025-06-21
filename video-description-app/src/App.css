@@ -1,0 +1,17 @@
+/* Custom styles that can't be easily achieved with Tailwind */
+.video-container {
+  aspect-ratio: 16 / 9;
+}
+
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
