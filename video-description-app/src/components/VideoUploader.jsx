@@ -20,6 +20,11 @@ const VideoUploader = ({ onFileUpload }) => {
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0]
       if (file.type.startsWith('video/')) {
+        // Check file size (50MB limit to match backend)
+        if (file.size > 50 * 1024 * 1024) {
+          alert('File is too large. Please upload a video smaller than 50MB.')
+          return
+        }
         onFileUpload(file)
       } else {
         alert('Please upload a valid video file')
@@ -31,6 +36,11 @@ const VideoUploader = ({ onFileUpload }) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0]
       if (file.type.startsWith('video/')) {
+        // Check file size (50MB limit to match backend)
+        if (file.size > 50 * 1024 * 1024) {
+          alert('File is too large. Please upload a video smaller than 50MB.')
+          return
+        }
         onFileUpload(file)
       } else {
         alert('Please upload a valid video file')
@@ -46,7 +56,7 @@ const VideoUploader = ({ onFileUpload }) => {
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <div
         style={{
-          padding: '3rem',
+          padding: '3rem 0',
           border: '2px dashed',
           borderColor: isDragging ? '#3b82f6' : '#cbd5e1',
           borderRadius: '1rem',
@@ -148,7 +158,7 @@ const VideoUploader = ({ onFileUpload }) => {
           <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9a1 1 0 00-1-1z" clipRule="evenodd" />
         </svg>
         <p style={{ fontSize: '0.875rem', color: '#64748b', margin: 0 }}>
-          Supported formats: MP4, WebM, MOV, AVI (max 100MB)
+          Supported formats: MP4, WebM, MOV, AVI (max 50MB)
         </p>
       </div>
     </div>

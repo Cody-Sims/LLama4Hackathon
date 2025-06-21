@@ -67,7 +67,12 @@ const DescriptionPanel = ({ scriptText, isGenerating, error }) => {
           </svg>
           <div>
             <p style={{ color: '#4b5563', margin: 0 }}>Generating description...</p>
-            <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: 0 }}>This may take a few moments</p>
+            <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: 0 }}>This may take 15-30 seconds</p>
+            <ul style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0.5rem 0 0 0', paddingLeft: '1.25rem' }}>
+              <li>Extracting video frames</li>
+              <li>Transcribing audio</li>
+              <li>Analyzing content with AI</li>
+            </ul>
           </div>
         </div>
       ) : error ? (

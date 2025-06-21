@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transcription Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1 {
+      color: #1e40af;
+    }
+    .container {
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .drop-area {
+      border: 2px dashed #cbd5e1;
+      border-radius: 8px;
+      padding: 40px;
+      text-align: center;
+      cursor: pointer;
+      margin-bottom: 20px;
+      transition: all 0.2s;
+    }
+    .drop-area.highlight {
+      border-color: #3b82f6;
+      background-color: #eff6ff;
+    }
+    .button {
+      background-color: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .button:hover {
+      background-color: #2563eb;
+    }
+    .button:disabled {
+      background-color: #e2e8f0;
+      color: #94a3b8;
+      cursor: not-allowed;
+    }
+    .result {
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      padding: 15px;
+      margin-top: 20px;
+      white-space: pre-wrap;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .spinner {
+      border: 4px solid rgba(0, 0, 0, 0.1);
+      border-left-color: #3b82f6;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      animation: spin 1s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 10px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .error {
+      background-color: #fef2f2;
+      border: 1px solid #fee2e2;
+      color: #b91c1c;
+      padding: 10px 15px;
+      border-radius: 4px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Transcription Test</h1>
+  
+  <div class="container">
+    <h2>Upload Audio or Video</h2>
+    <div id="drop-area" class="drop-area">
+      <p>Drag and drop an audio or video file here, or click to browse</p>
+      <input type="file" id="file-input" accept="audio/*,video/*" style="display: none;">
+      <button class="button" id="browse-button">Browse Files</button>
+    </div>
+    
+    <div id="file-info" style="display: none;">
+      <p><strong>Selected file:</strong> <span id="file-name"></span></p>
+      <button class="button" id="transcribe-button">Transcribe</button>
+    </div>
+    
+    <div id="loading" style="display: none; margin-top: 20px;">
+      <span class="spinner"></span> Transcribing... This may take a few moments.
+    </div>
+    
+    <div id="error" class="error" style="display: none;"></div>
+    
+    <div id="result-container" style="display: none;">
+      <h3>Transcription Result:</h3>
+      <div id="result" class="result"></div>
+    </div>
+  </div>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const dropArea = document.getElementById('drop-area');
+      const fileInput = document.getElementById('file-input');
+      const browseButton = document.getElementById('browse-button');
+      const fileInfo = document.getElementById('file-info');
+      const fileName = document.getElementById('file-name');
+      const transcribeButton = document.getElementById('transcribe-button');
+      const loading = document.getElementById('loading');
+      const error = document.getElementById('error');
+      const resultContainer = document.getElementById('result-container');
+      const result = document.getElementById('result');
+      
+      let selectedFile = null;
+      
+      // Server URL
+      const serverUrl = 'http://localhost:3001';
+      
+      // Prevent default drag behaviors
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, preventDefaults, false);
+        document.body.addEventListener(eventName, preventDefaults, false);
+      });
+      
+      // Highlight drop area when item is dragged over it
+      ['dragenter', 'dragover'].forEach(eventName => {
+        dropArea.addEventListener(eventName, highlight, false);
+      });
+      
+      ['dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, unhighlight, false);
+      });
+      
+      // Handle dropped files
+      dropArea.addEventListener('drop', handleDrop, false);
+      
+      // Handle browse button
+      browseButton.addEventListener('click', () => {
+        fileInput.click();
+      });
+      
+      // Handle file selection
+      fileInput.addEventListener('change', handleFiles);
+      
+      // Handle transcribe button
+      transcribeButton.addEventListener('click', transcribeFile);
+      
+      function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      
+      function highlight() {
+        dropArea.classList.add('highlight');
+      }
+      
+      function unhighlight() {
+        dropArea.classList.remove('highlight');
+      }
+      
+      function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        handleFiles({ target: { files } });
+      }
+      
+      function handleFiles(e) {
+        const files = e.target.files;
+        if (files.length) {
+          selectedFile = files[0];
+          fileName.textContent = selectedFile.name;
+          fileInfo.style.display = 'block';
+          error.style.display = 'none';
+          resultContainer.style.display = 'none';
+        }
+      }
+      
+      async function transcribeFile() {
+        if (!selectedFile) return;
+        
+        // Check if file is audio or video
+        if (!selectedFile.type.startsWith('audio/') && !selectedFile.type.startsWith('video/')) {
+          showError('Please select an audio or video file');
+          return;
+        }
+        
+        // Check file size
+        if (selectedFile.size > 50 * 1024 * 1024) {
+          showError('File is too large. Maximum size is 50MB');
+          return;
+        }
+        
+        // Show loading state
+        loading.style.display = 'block';
+        transcribeButton.disabled = true;
+        error.style.display = 'none';
+        resultContainer.style.display = 'none';
+        
+        try {
+          // First check if server is available
+          try {
+            const testResponse = await fetch(`${serverUrl}/api/test`);
+            if (!testResponse.ok) {
+              throw new Error('Transcription server is not available');
+            }
+          } catch (err) {
+            throw new Error('Cannot connect to transcription server. Please make sure it is running.');
+          }
+          
+          // Create form data
+          const formData = new FormData();
+          formData.append('file', selectedFile);
+          
+          // Send request
+          const response = await fetch(`${serverUrl}/api/transcribe`, {
+            method: 'POST',
+            body: formData
+          });
+          
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to transcribe file');
+          }
+          
+          const data = await response.json();
+          
+          if (data.success && data.transcript) {
+            // Show result
+            result.textContent = data.transcript;
+            resultContainer.style.display = 'block';
+          } else {
+            throw new Error('No transcript was generated');
+          }
+        } catch (err) {
+          showError(err.message);
+        } finally {
+          // Hide loading state
+          loading.style.display = 'none';
+          transcribeButton.disabled = false;
+        }
+      }
+      
+      function showError(message) {
+        error.textContent = message;
+        error.style.display = 'block';
+      }
+      
+      // Test server connection on page load
+      fetch(`${serverUrl}/api/test`)
+        .then(response => {
+          if (!response.ok) {
+            showError('Transcription server is not available');
+          }
+        })
+        .catch(() => {
+          showError('Cannot connect to transcription server. Please make sure it is running.');
+        });
+    });
+  </script>
+</body>
+</html>
