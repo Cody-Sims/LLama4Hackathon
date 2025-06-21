@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+requests
+logzero
+llama_api_client
+opencv-python
