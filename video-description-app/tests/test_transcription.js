@@ -23,9 +23,14 @@ const transcribeWithPython = (audioPath, modelSize = 'small') => {
       return;
     }
     
-    console.log(`Running command: python ${scriptPath} ${audioPath} --model ${modelSize}`);
+    // Use the Python interpreter from the virtual environment
+    const venvPythonPath = path.resolve(path.join(__dirname, '..', '..', 'venv', 'bin', 'python'));
+    const pythonCommand = fs.existsSync(venvPythonPath) ? venvPythonPath : 'python';
+    console.log(`Using Python interpreter: ${pythonCommand}`);
     
-    const pythonProcess = spawn('python', [
+    console.log(`Running command: ${pythonCommand} ${scriptPath} ${audioPath} --model ${modelSize}`);
+    
+    const pythonProcess = spawn(pythonCommand, [
       scriptPath,
       audioPath,
       '--model', modelSize
