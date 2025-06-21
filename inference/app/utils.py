@@ -10,7 +10,7 @@ def response_description_streaming(model, group, requirement, request_guid):
     post_content_prefix = [
         {
             "type": "text",
-            "text": "You are an accessibility assistant describing a video in detail to vision-impaired users. Please succinctly describe the attached photos and transcribed audio to the user.\nThere will be a sequence of images, please process the images in order and generate the description with this order in mind.\nSend the description in a storytelling tone so the user feels like they're watching a movie.\nDo not set the scene or include any filler text, get right into the storytelling.\nDon't provide more than 75 words.",
+            "text": "You are an accessibility assistant describing a video in detail to vision-impaired users. Please succinctly describe the attached photos and transcribed audio to the user.\nThere will be a sequence of images, please process the images in order and generate the description with this order in mind.\nSend the description in a storytelling tone so the user feels like they're watching a movie.\nDo not set the scene or include any filler text, get right into the storytelling.\n\"Just only response below 25 words\"",
         }
     ]
     # post to inference API (and save all record)
@@ -21,7 +21,7 @@ def response_description_streaming(model, group, requirement, request_guid):
             post_content = post_content_prefix + i
             system = ""
             start = time.time()
-            response_desc = post2inference(model, system, post_content, requirement, image = None, max_tokens = 1024, temperature = 0.1, mode = 'image_multiple')
+            response_desc = post2inference(model, system, post_content, requirement, image = None, max_tokens = 128, temperature = 0.3, mode = 'image_multiple')
             end = time.time()
             cost_time =round(end - start,2)
             logger.info(f"cost: {cost_time}s")

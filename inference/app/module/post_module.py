@@ -97,6 +97,8 @@ def post2inference(model:str, system:str, content:str, requirement:dict, image =
     elif mode == 'image_multiple':
         postjson={
             "model": model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
             "messages": [
                 {
                     "role": "user",
@@ -105,7 +107,7 @@ def post2inference(model:str, system:str, content:str, requirement:dict, image =
                 },
             ]
         }
-        res = requests.post(url, headers=headers, json = postjson, verify=False, timeout=10)
+        res = requests.post(url, headers=headers, json = postjson, verify=False, timeout=60)
         if res.status_code == 200:
             print(res.status_code)
             print(res.json()['completion_message']['content']['text'])
