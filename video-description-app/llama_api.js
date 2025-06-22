@@ -251,11 +251,11 @@ export async function generateVideoDescription(transcript, framesPaths, startTim
       let additionalText = "";
       
       if (transcript) {
-        additionalText += `\nHere is the transcript from the video chunk: ${transcript}`;
+        additionalText += `\nHere is the transcript from the video chunk: ${transcript}.`;
       }
       
       if (previousDescription) {
-        additionalText += `\n\nPrevious chunk description: "${previousDescription}"\n\nContinue the narrative from where the previous description left off. Do not repeat information. Focus on what happens next in the video.`;
+        additionalText += `\n\nPrevious chunk description: "${previousDescription}"\n\nContinue the narrative from where the previous description left off. Do not repeat information. Focus on what happens in the recently video and the tone is consistent with the previous description by one sentence, it seems like telling a story. If available, please add the conjunctions in the begin such as: because, since, so, therefore, as a result, but, however, although, though, on the other hand, nevertheless, and, also, in addition, furthermore, moreover, if, unless, as long as, provided that, so that, in order to, indeed, in fact, especially, above all...`;
       }
       
       contentArray[0].text += additionalText;
@@ -281,8 +281,8 @@ export async function generateVideoDescription(transcript, framesPaths, startTim
     while (attempts < maxAttempts) {
       attempts++;
       // Adjust parameters to encourage brevity
-      const temperature = 0.3 + (attempts * 0.1); // Increase temperature with each attempt
-      const max_tokens = 100; // Limit tokens to encourage brevity
+      const temperature = 0.3 - (attempts * 0.05); // Increase temperature with each attempt
+      const max_tokens = 40; // Limit tokens to encourage brevity
 
       contentArray.forEach(item => {
         if (item.type === "text") {

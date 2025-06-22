@@ -1,7 +1,10 @@
 #!/bin/bash
 
 cd /root/video-description-app
-nohup node backend.js > output.txt &
+node backend.js &
+
+sleep 3
+BACKEND_PID=$!
 
 export NVM_DIR="/root/.nvm"
 source "$NVM_DIR/nvm.sh"
