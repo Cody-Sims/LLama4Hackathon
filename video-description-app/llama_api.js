@@ -92,15 +92,19 @@ export function binary2base64(buffer) {
 /**
  * Process video frames for Llama API
  * @param {Array} framesPaths - Array of paths to extracted frames
+ * @param {string} language - The language code for the description
  * @returns {Array} - Array of content objects for Llama API
  */
-export async function processVideoFrames(framesPaths) {
+export async function processVideoFrames(framesPaths, language = 'en') {
   const contentArray = [];
   
-  // Add text prefix with focus on continuity and brevity
+  // Get the language name for the prompt
+  const languageName = LANGUAGE_NAMES[language] || 'the same language as the transcript';
+  
+  // Add text prefix with focus on continuity, brevity, and language
   contentArray.push({
     type: "text",
-    text: "You are an accessibility assistant describing a video for vision-impaired users. Your description must be under 25 words and will be played alongside the video.\n\nFocus on creating a continuous narrative that flows naturally from one segment to the next. Each segment should build on the previous one without repeating information.\n\nDescribe the attached photos and transcribed audio in a concise, storytelling tone. Process the images in order and focus on what's happening in this specific segment of the video.\n\nKeep your description under 25 words while maintaining clarity and continuity."
+    text: `You are an accessibility assistant describing a video for vision-impaired users. Your description must be under 25 words and will be played alongside the video.\n\nIMPORTANT: Generate your description in ${languageName}. Your entire response should be in ${languageName} only.\n\nFocus on creating a continuous narrative that flows naturally from one segment to the next. Each segment should build on the previous one without repeating information.\n\nDescribe the attached photos and transcribed audio in a concise, storytelling tone. Process the images in order and focus on what's happening in this specific segment of the video.\n\nKeep your description under 25 words while maintaining clarity and continuity.`
   });
   
   // Add frames as image_url objects - limit to max 9 frames (1 per second for a 9-second segment)
@@ -206,19 +210,37 @@ function cleanupDescription(text) {
 // Store previous descriptions to maintain context between chunks
 const previousDescriptions = {};
 
+// Language names for prompting
+const LANGUAGE_NAMES = {
+  'en': 'English',
+  'es': 'Spanish',
+  'fr': 'French',
+  'de': 'German',
+  'it': 'Italian',
+  'pt': 'Portuguese',
+  'nl': 'Dutch',
+  'ru': 'Russian',
+  'zh': 'Chinese',
+  'ja': 'Japanese',
+  'ko': 'Korean',
+  'ar': 'Arabic',
+  'hi': 'Hindi'
+};
+
 /**
  * Generate video description using Llama API with segmentation for longer videos
  * @param {string} transcript - The video transcript
  * @param {Array} framesPaths - Array of paths to extracted frames
  * @param {number} startTime - Start time of the chunk in seconds
  * @param {number} endTime - End time of the chunk in seconds
+ * @param {string} language - The language code for the description (default: 'en')
  * @returns {Promise<string>} - The generated description
  */
-export async function generateVideoDescription(transcript, framesPaths, startTime = 0, endTime = null) {
+export async function generateVideoDescription(transcript, framesPaths, startTime = 0, endTime = null, language = 'en') {
   try {
     // This is a single chunk - process all frames at once
-    console.log(`Processing video chunk with ${framesPaths.length} frames (${startTime}s to ${endTime || 'end'})`);
-    const contentArray = await processVideoFrames(framesPaths);
+    console.log(`Processing video chunk with ${framesPaths.length} frames (${startTime}s to ${endTime || 'end'}) in ${LANGUAGE_NAMES[language] || language}`);
+    const contentArray = await processVideoFrames(framesPaths, language);
     
     // Get the previous chunk's description to maintain context
     const previousChunkKey = Math.floor(startTime / 9) - 1;
@@ -242,10 +264,13 @@ export async function generateVideoDescription(transcript, framesPaths, startTim
     // Call Llama API with Llama 4 model
     const model = "Llama-4-Maverick-17B-128E-Instruct-FP8";
     
-    // System message that emphasizes continuity and brevity
+    // Get the language name for the system message
+    const languageName = LANGUAGE_NAMES[language] || 'the same language as the transcript';
+    
+    // System message that emphasizes continuity, brevity, and language
     const system = previousDescription 
-      ? "Continue the narrative from the previous description. Be concise (under 25 words) and avoid repetition."
-      : "Provide a concise description (under 25 words) of what's happening in the video.";
+      ? `Continue the narrative from the previous description. Be concise (under 25 words) and avoid repetition. Generate your response in ${languageName} only.`
+      : `Provide a concise description (under 25 words) of what's happening in the video. Generate your response in ${languageName} only.`;
     
     // Try up to 3 times to get a good response
     let description = "";

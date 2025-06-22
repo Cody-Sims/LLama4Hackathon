@@ -13,6 +13,85 @@ import cors from 'cors';
 // Import Llama API functions
 import { generateVideoDescription } from './llama_api.js';
 
+// Language detection function
+function detectTranscriptLanguage(transcript) {
+  if (!transcript || typeof transcript !== 'string' || transcript.trim().length === 0) {
+    return 'en'; // Default to English for empty transcript
+  }
+  
+  // Check for specific character ranges first (more reliable for some languages)
+  
+  // Chinese characters
+  if (/[\u4e00-\u9fa5]/.test(transcript)) {
+    console.log("Detected Chinese characters in transcript");
+    return 'zh';
+  }
+  
+  // Japanese characters (Hiragana and Katakana)
+  if (/[\u3040-\u30ff]/.test(transcript)) {
+    return 'ja';
+  }
+  
+  // Korean characters (Hangul)
+  if (/[\uac00-\ud7af]/.test(transcript)) {
+    return 'ko';
+  }
+  
+  // Arabic characters
+  if (/[\u0600-\u06ff]/.test(transcript)) {
+    return 'ar';
+  }
+  
+  // Cyrillic characters (Russian, etc.)
+  if (/[\u0400-\u04ff]/.test(transcript)) {
+    return 'ru';
+  }
+  
+  // Devanagari (Hindi, etc.)
+  if (/[\u0900-\u097f]/.test(transcript)) {
+    return 'hi';
+  }
+  
+  // Normalize text for better detection of Latin-based languages
+  const normalizedText = transcript.toLowerCase().trim();
+  
+  // Common words and patterns for different languages
+  const languagePatterns = {
+    'en': ['the', 'and', 'is', 'in', 'to', 'it', 'that', 'for', 'you', 'with', 'using', 'module', 'directly'],
+    'es': ['el', 'la', 'los', 'las', 'y', 'es', 'en', 'que', 'por', 'para'],
+    'fr': ['le', 'la', 'les', 'et', 'est', 'en', 'que', 'pour', 'dans', 'un'],
+    'de': ['der', 'die', 'das', 'und', 'ist', 'in', 'zu', 'den', 'mit', 'für'],
+    'it': ['il', 'la', 'i', 'le', 'e', 'è', 'in', 'che', 'per', 'un'],
+    'pt': ['o', 'a', 'os', 'as', 'e', 'é', 'em', 'que', 'para', 'um'],
+    'nl': ['de', 'het', 'een', 'en', 'is', 'in', 'te', 'dat', 'van', 'voor']
+  };
+  
+  // Count matches for each language
+  const matches = {};
+  for (const [lang, patterns] of Object.entries(languagePatterns)) {
+    matches[lang] = 0;
+    for (const pattern of patterns) {
+      // Count how many times this pattern appears in the text
+      const regex = new RegExp(`\\b${pattern}\\b`, 'gi');
+      const count = (normalizedText.match(regex) || []).length;
+      matches[lang] += count;
+    }
+  }
+  
+  // Find the language with the most matches
+  let bestMatch = 'en';
+  let maxMatches = 0;
+  for (const [lang, count] of Object.entries(matches)) {
+    if (count > maxMatches) {
+      maxMatches = count;
+      bestMatch = lang;
+    }
+  }
+  
+  // If no good matches, default to English
+  return maxMatches > 0 ? bestMatch : 'en';
+};
+
 // Load environment variables
 dotenv.config();
 
@@ -441,13 +520,24 @@ app.post('/api/process-chunk', upload.single('video'), async (req, res) => {
     // 4. Call Llama API for description generation
     console.log('Calling Llama API for chunk description generation...');
     let generatedDescription;
+    let detectedLanguage = 'en'; // Default to English
     
     try {
       // Use the integrated Llama API with segmentation for longer videos
       console.log(`Sending request to Llama API with transcript and ${framesPaths.length} frames`);
       
-      // Pass the startTime and endTime to the generateVideoDescription function
-      generatedDescription = await generateVideoDescription(transcript, framesPaths, startTime, endTime);
+      // Detect the language of the transcript
+      detectedLanguage = detectTranscriptLanguage(transcript);
+      console.log(`Detected language: ${detectedLanguage}`);
+      
+      // Special case for Chinese characters
+      if (transcript && /[\u4e00-\u9fa5]/.test(transcript)) {
+        console.log("Chinese characters detected in transcript, setting language to Chinese");
+        detectedLanguage = 'zh';
+      }
+      
+      // Pass the startTime, endTime, and detected language to the generateVideoDescription function
+      generatedDescription = await generateVideoDescription(transcript, framesPaths, startTime, endTime, detectedLanguage);
       
       if (!generatedDescription || generatedDescription.trim() === '') {
         throw new Error('Empty response from Llama API');
@@ -489,7 +579,8 @@ app.post('/api/process-chunk', upload.single('video'), async (req, res) => {
       metadata: {
         startTime,
         endTime,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        language: detectedLanguage
       }
     });
     

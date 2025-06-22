@@ -21,6 +21,7 @@ function App() {
   const [scriptText, setScriptText] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState(null)
+  const [detectedLanguage, setDetectedLanguage] = useState('en') // Default to English
   
   // State for voice customization
   const [voiceSettings, setVoiceSettings] = useState({
@@ -49,6 +50,7 @@ function App() {
       setProcessedChunks([])
       setProcessingProgress(0)
       setCurrentChunkIndex(-1)
+      setDetectedLanguage('en') // Reset to default language
       
       // Split the video into chunks
       const videoChunks = await splitVideoIntoChunks(file);
@@ -124,6 +126,12 @@ function App() {
           const combinedScript = allChunks.join('\n\n');
           console.log('Updated script:', combinedScript);
           setScriptText(combinedScript);
+          
+          // Check if we have language metadata and update the detected language
+          if (result.metadata && result.metadata.language) {
+            console.log(`Detected language from backend: ${result.metadata.language}`);
+            setDetectedLanguage(result.metadata.language);
+          }
         }
       });
       
@@ -390,6 +398,7 @@ function App() {
                       <VoiceCustomization 
                         onVoiceChange={setVoiceSettings}
                         scriptText={scriptText}
+                        detectedLanguage={detectedLanguage}
                       />
                     </div>
                   )}

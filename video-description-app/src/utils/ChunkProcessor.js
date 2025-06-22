@@ -51,7 +51,12 @@ export const processChunk = async (chunkBlob, startTime, endTime, backendUrl) =>
         success: true,
         script: data.script,
         startTime,
-        endTime
+        endTime,
+        metadata: data.metadata || {
+          language: 'en', // Default to English if no language metadata
+          startTime,
+          endTime
+        }
       };
     } else {
       throw new Error('No description was generated for chunk');
