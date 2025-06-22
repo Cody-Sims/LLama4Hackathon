@@ -283,6 +283,12 @@ export async function generateVideoDescription(transcript, framesPaths, startTim
       // Adjust parameters to encourage brevity
       const temperature = 0.3 + (attempts * 0.1); // Increase temperature with each attempt
       const max_tokens = 100; // Limit tokens to encourage brevity
+
+      contentArray.forEach(item => {
+        if (item.type === "text") {
+          console.log("AAAAA text:", item.text);
+        }
+      });
       
       description = await post2inference(model, system, contentArray, max_tokens, temperature);
       

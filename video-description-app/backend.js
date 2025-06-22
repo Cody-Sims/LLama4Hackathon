@@ -245,6 +245,8 @@ const transcribeWithPython = (audioPath, modelSize = 'small') => {
       transcript += chunk;
       console.log(`Python stdout: ${chunk}`);
     });
+
+    console.log("cpp transcript: " + transcript);
     
     pythonProcess.stderr.on('data', (data) => {
       const chunk = data.toString();

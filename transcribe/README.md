@@ -1,5 +1,6 @@
 Commands to run:
 
+```
 brew install ffmpeg
 python3 -m venv venv && source venv/bin/activate
 pip install --upgrade openai-whisper torch
@@ -17,3 +18,4 @@ curl -L \
 
 
 python transcribe/transcribe_cpp.py  transcribe/Video_Clip_Generation_Complete.mp4
+```
