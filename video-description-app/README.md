@@ -17,7 +17,7 @@ A web application that generates audio descriptions for videos using AI. This to
 - **Backend**: Node.js with Express
 - **Video Processing**: FFmpeg
 - **Transcription**: OpenAI Whisper
-- **AI Description**: Llama 3 via Together.ai API
+- **AI Description**: Llama 4 via Llama API
 
 ## Prerequisites
 
@@ -25,7 +25,7 @@ A web application that generates audio descriptions for videos using AI. This to
 - FFmpeg installed on your system
 - Python 3.8+ (for transcription)
 - OpenAI API key (for audio transcription fallback)
-- Together.ai API key (for Llama 3 model access)
+- Llama API key (for Llama 4 model access)
 
 ## Setup
 
@@ -45,11 +45,11 @@ A web application that generates audio descriptions for videos using AI. This to
    For the backend (.env):
    ```
    OPENAI_API_KEY=your_openai_api_key_here
-   LLAMA4_API_KEY=your_together_ai_api_key_here
+   LLAMA_API_KEY=your_llama_api_key_here
    PORT=3001
    ```
    
-   Note: The `LLAMA4_API_KEY` environment variable is used for the Together.ai API key that provides access to the Llama 3 model.
+   Note: The `LLAMA_API_KEY` environment variable is used for the Llama API key that provides access to the Llama 4 model.
 
    For the frontend (.env.local):
    ```
@@ -125,7 +125,7 @@ The application processes videos in the following way:
 
 1. **Frame Extraction**: The video is divided into 9-second segments, with one frame extracted per second.
 2. **Audio Transcription**: The audio is extracted and transcribed using either a local Python script or the OpenAI Whisper API.
-3. **AI Description Generation**: The frames and transcript are sent to the Llama 3 model via Together.ai API with a specific system prompt that:
+3. **AI Description Generation**: The frames and transcript are sent to the Llama 4 model via Llama API with a specific system prompt that:
    - Focuses on accessibility for vision-impaired users
    - Processes images in sequential order
    - Uses a storytelling tone
@@ -139,6 +139,8 @@ The application processes videos in the following way:
 - `/transcribe` - Python script for audio transcription
 - `/uploads` - Temporary storage for uploaded videos (created at runtime)
 - `/processing` - Temporary storage for processing files (created at runtime)
+- `/data/video` - Storage for uploaded videos for Llama API processing
+- `/data/record` - Storage for generated descriptions from Llama API
 
 ## License
 

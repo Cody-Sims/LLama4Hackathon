@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './App.css'
 
 // Component imports
@@ -7,6 +7,10 @@ import VideoPlayer from './components/VideoPlayer'
 import DescriptionPanel from './components/DescriptionPanel'
 import ControlBar from './components/ControlBar'
 import VoiceCustomization from './components/VoiceCustomization'
+
+// Utility imports
+import { splitVideoIntoChunks } from './utils/VideoChunker'
+import { ChunkProcessor } from './utils/ChunkProcessor'
 
 function App() {
   // State for managing the video file and its URL
@@ -24,13 +28,36 @@ function App() {
     rate: 1,
     pitch: 1
   })
+  
+  // State for chunk processing
+  const [chunks, setChunks] = useState([])
+  const [processedChunks, setProcessedChunks] = useState([])
+  const [processingProgress, setProcessingProgress] = useState(0)
+  const [currentChunkIndex, setCurrentChunkIndex] = useState(-1)
+  
+  // Refs
+  const chunkProcessorRef = useRef(null)
 
   // Handle file upload
-  const handleFileUpload = (file) => {
-    setVideoFile(file)
-    setVideoUrl(URL.createObjectURL(file))
-    setScriptText('')
-    setError(null)
+  const handleFileUpload = async (file) => {
+    try {
+      setVideoFile(file)
+      setVideoUrl(URL.createObjectURL(file))
+      setScriptText('')
+      setError(null)
+      setChunks([])
+      setProcessedChunks([])
+      setProcessingProgress(0)
+      setCurrentChunkIndex(-1)
+      
+      // Split the video into chunks
+      const videoChunks = await splitVideoIntoChunks(file);
+      setChunks(videoChunks);
+      console.log(`Video split into ${videoChunks.length} chunks`);
+    } catch (error) {
+      console.error('Error handling file upload:', error);
+      setError('Error processing video: ' + error.message);
+    }
   }
 
   // Test backend connection
@@ -48,50 +75,120 @@ function App() {
     }
   }
 
-  // Generate description using AI
-  const generateDescription = async () => {
-    if (!videoFile) return
+  // Process video chunks in parallel
+  const processChunks = async () => {
+    if (!videoFile || chunks.length === 0) return;
     
-    setIsGenerating(true)
-    setError(null)
+    setIsGenerating(true);
+    setError(null);
+    setProcessedChunks([]);
+    setProcessingProgress(0); // Reset progress
     
     try {
       // Test backend connection first
-      const isBackendAvailable = await testBackendConnection()
+      const isBackendAvailable = await testBackendConnection();
       if (!isBackendAvailable) {
-        throw new Error('Cannot connect to backend server. Please make sure it is running.')
+        throw new Error('Cannot connect to backend server. Please make sure it is running.');
+      }
+      
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+      
+      // Initialize the chunk processor
+      const processor = new ChunkProcessor(backendUrl);
+      chunkProcessorRef.current = processor;
+      
+      // Set up callbacks
+      processor.onProgress((progress) => {
+        console.log(`Progress update: ${progress.toFixed(1)}%`);
+        setProcessingProgress(progress);
+      });
+      
+      processor.onChunkProcessed((result, index) => {
+        console.log(`Chunk ${index} processed:`, result);
+        
+        setProcessedChunks((prev) => {
+          // Create a new array with the correct length if needed
+          const newChunks = prev.length >= index + 1 ? [...prev] : new Array(index + 1).fill(null);
+          newChunks[index] = result;
+          return newChunks;
+        });
+        
+        // Update the script text with all processed chunks
+        if (result && result.success) {
+          const combinedScript = chunkProcessorRef.current.getCombinedScript();
+          console.log('Updated script:', combinedScript);
+          setScriptText(combinedScript);
+        }
+      });
+      
+      processor.onComplete((results) => {
+        setIsGenerating(false);
+        setProcessingProgress(100); // Ensure progress is 100% when complete
+        console.log('All chunks processed:', results);
+      });
+      
+      // Add chunks to the processor
+      console.log(`Adding ${chunks.length} chunks to processor`);
+      processor.addChunks(chunks);
+      
+    } catch (err) {
+      console.error('Error processing video chunks:', err);
+      setError('Failed to process video: ' + err.message);
+      setIsGenerating(false);
+    }
+  };
+  
+  // Legacy method - Generate description using AI (all at once)
+  const generateDescription = async () => {
+    if (chunks.length > 0) {
+      // Use the new chunk-based processing
+      await processChunks();
+      return;
+    }
+    
+    // Fall back to the old method if chunking failed
+    if (!videoFile) return;
+    
+    setIsGenerating(true);
+    setError(null);
+    
+    try {
+      // Test backend connection first
+      const isBackendAvailable = await testBackendConnection();
+      if (!isBackendAvailable) {
+        throw new Error('Cannot connect to backend server. Please make sure it is running.');
       }
       
       // Create a FormData object to send the video file
-      const formData = new FormData()
-      formData.append('video', videoFile)
+      const formData = new FormData();
+      formData.append('video', videoFile);
       
       // Send the video to our backend API
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
       const response = await fetch(`${backendUrl}/api/process-video`, {
         method: 'POST',
         body: formData,
-      })
+      });
       
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to process video')
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to process video');
       }
       
-      const data = await response.json()
+      const data = await response.json();
       
       if (data.success && data.script) {
-        setScriptText(data.script)
+        setScriptText(data.script);
       } else {
-        throw new Error('No description was generated')
+        throw new Error('No description was generated');
       }
     } catch (err) {
-      console.error('Error generating description:', err)
-      setError('Failed to generate description: ' + err.message)
+      console.error('Error generating description:', err);
+      setError('Failed to generate description: ' + err.message);
     } finally {
-      setIsGenerating(false)
+      setIsGenerating(false);
     }
-  }
+  };
 
   return (
     <div style={{ 
@@ -211,7 +308,48 @@ function App() {
                     videoUrl={videoUrl} 
                     scriptText={scriptText}
                     voiceSettings={voiceSettings}
+                    processedChunks={processedChunks}
                   />
+                  
+                  {/* Processing progress indicator */}
+                  {isGenerating && (
+                    <div style={{ marginTop: '1rem' }}>
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        marginBottom: '0.5rem' 
+                      }}>
+                        <div style={{ 
+                          flex: '1', 
+                          height: '0.5rem', 
+                          backgroundColor: '#e2e8f0', 
+                          borderRadius: '0.25rem', 
+                          overflow: 'hidden' 
+                        }}>
+                          <div style={{ 
+                            width: `${processingProgress}%`, 
+                            height: '100%', 
+                            backgroundColor: '#3b82f6', 
+                            transition: 'width 0.3s ease' 
+                          }} />
+                        </div>
+                        <span style={{ 
+                          marginLeft: '1rem', 
+                          fontSize: '0.875rem', 
+                          color: '#64748b' 
+                        }}>
+                          {Math.round(processingProgress)}%
+                        </span>
+                      </div>
+                      <p style={{ 
+                        fontSize: '0.875rem', 
+                        color: '#64748b', 
+                        margin: '0' 
+                      }}>
+                        Processing video in chunks... You can start watching while descriptions are being generated.
+                      </p>
+                    </div>
+                  )}
                   <ControlBar 
                     onGenerateDescription={generateDescription} 
                     isGenerating={isGenerating}
@@ -237,6 +375,7 @@ function App() {
                       scriptText={scriptText} 
                       isGenerating={isGenerating}
                       error={error}
+                      processingProgress={processingProgress}
                     />
                   </div>
                   

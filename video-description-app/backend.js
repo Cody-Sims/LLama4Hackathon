@@ -10,6 +10,9 @@ import { spawn } from 'child_process';
 import dotenv from 'dotenv';
 import cors from 'cors';
 
+// Import Llama API functions
+import { generateVideoDescription } from './llama_api.js';
+
 // Load environment variables
 dotenv.config();
 
@@ -52,48 +55,48 @@ const upload = multer({
 });
 
 // Helper function to extract frames from video
-const extractFrames = (videoPath, outputDir, segmentDuration = 9) => {
+const extractFrames = (videoPath, outputDir, segmentDuration = 9, startTime = 0, endTime = null) => {
   return new Promise((resolve, reject) => {
     // Get video duration
     ffmpeg.ffprobe(videoPath, (err, metadata) => {
       if (err) return reject(err);
       
       const duration = metadata.format.duration;
+      const actualEndTime = endTime !== null ? Math.min(endTime, duration) : duration;
+      const actualDuration = actualEndTime - startTime;
+      
       const framesPaths = [];
       
-      // Calculate number of segments
-      const numSegments = Math.ceil(duration / segmentDuration);
-      console.log(`Video duration: ${duration}s, creating ${numSegments} segments of ${segmentDuration}s each`);
+      // Calculate number of frames to extract (1 per second)
+      const numFrames = Math.ceil(actualDuration);
+      console.log(`Video chunk duration: ${actualDuration}s (from ${startTime}s to ${actualEndTime}s), extracting ${numFrames} frames`);
       
       // Create an array of promises for each screenshot
       const screenshotPromises = [];
       
-      // For each segment, take a frame every second
-      for (let segment = 0; segment < numSegments; segment++) {
-        for (let second = 0; second < segmentDuration; second++) {
-          const timestamp = segment * segmentDuration + second;
-          
-          // Skip if timestamp exceeds video duration
-          if (timestamp >= duration) continue;
-          
-          const frameIndex = segment * segmentDuration + second;
-          const outputPath = path.join(outputDir, `frame-${frameIndex}.png`);
-          framesPaths.push(outputPath);
-          
-          const promise = new Promise((resolveFrame, rejectFrame) => {
-            ffmpeg(videoPath)
-              .screenshots({
-                count: 1,
-                timestamps: [timestamp],
-                filename: `frame-${frameIndex}.png`,
-                folder: outputDir
-              })
-              .on('end', () => resolveFrame())
-              .on('error', (err) => rejectFrame(err));
-          });
-          
-          screenshotPromises.push(promise);
-        }
+      // Take a frame every second within the specified time range
+      for (let second = 0; second < numFrames; second++) {
+        const timestamp = startTime + second;
+        
+        // Skip if timestamp exceeds end time
+        if (timestamp >= actualEndTime) continue;
+        
+        const outputPath = path.join(outputDir, `frame-${second}.png`);
+        framesPaths.push(outputPath);
+        
+        const promise = new Promise((resolveFrame, rejectFrame) => {
+          ffmpeg(videoPath)
+            .screenshots({
+              count: 1,
+              timestamps: [timestamp],
+              filename: `frame-${second}.png`,
+              folder: outputDir
+            })
+            .on('end', () => resolveFrame())
+            .on('error', (err) => rejectFrame(err));
+        });
+        
+        screenshotPromises.push(promise);
       }
       
       // Wait for all screenshots to be taken
@@ -105,9 +108,21 @@ const extractFrames = (videoPath, outputDir, segmentDuration = 9) => {
 };
 
 // Helper function to extract audio from video
-const extractAudio = (videoPath, outputPath) => {
+const extractAudio = (videoPath, outputPath, startTime = 0, duration = null) => {
   return new Promise((resolve, reject) => {
-    ffmpeg(videoPath)
+    let ffmpegCommand = ffmpeg(videoPath);
+    
+    // If start time is specified, seek to that position
+    if (startTime > 0) {
+      ffmpegCommand = ffmpegCommand.seekInput(startTime);
+    }
+    
+    // If duration is specified, limit the duration
+    if (duration !== null) {
+      ffmpegCommand = ffmpegCommand.duration(duration);
+    }
+    
+    ffmpegCommand
       .outputOptions([
         '-vn',                  // No video
         '-acodec', 'pcm_s16le', // 16-bit PCM
@@ -271,62 +286,23 @@ app.post('/api/process-video', upload.single('video'), async (req, res) => {
     }));
     console.log(`Converted ${base64Frames.length} frames to base64`);
     
-    // 5. Call Llama4 API with the actual implementation
-    console.log('Calling Llama4 API for description generation...');
-    let llama4Response;
+    // 5. Call Llama API for description generation
+    console.log('Calling Llama API for description generation...');
     let generatedDescription;
     
     try {
-      // Check if we have API keys configured
-      if (!process.env.LLAMA4_API_KEY) {
-        console.log('No Llama4 API key found, using mock response');
-        throw new Error('No API key configured');
+      // Use the integrated Llama API with segmentation for longer videos
+      console.log(`Sending request to Llama API with transcript and ${framesPaths.length} frames`);
+      console.log(`Video duration detected: ${framesPaths.length} seconds (assuming 1 frame per second)`);
+      generatedDescription = await generateVideoDescription(transcript, framesPaths);
+      
+      if (!generatedDescription || generatedDescription.trim() === '') {
+        throw new Error('Empty response from Llama API');
       }
       
-      const systemPrompt = `You are an accessibility assistant describing a video in detail to vision-impaired users. Please succinctly describe the attached photos and transcribed audio to the user.
-
-There will be a sequence of images, please process the images in order and generate the description with this order in mind. 
-
-Send the description in a storytelling tone so the user feels like they're watching a movie.
-
-Do not set the scene or include any filler text, get right into the storytelling.
-
-Don't provide more than 75 words.`;
-      
-      // Use the actual Llama API endpoint
-      console.log('Sending request to Llama API with transcript and frames');
-      llama4Response = await axios.post(
-        'https://api.together.xyz/v1/completions',  // Together.ai API endpoint for Llama models
-        {
-          model: "meta-llama/Llama-3-70b-chat-hf",  // Using Llama 3 70B model
-          prompt: JSON.stringify({
-            system: systemPrompt,
-            messages: [
-              {
-                role: "user", 
-                content: [
-                  { type: "text", text: `Here is the transcript from the video: ${transcript}` },
-                  ...base64Frames.map(frame => ({ type: "image_url", image_url: { url: frame } }))
-                ]
-              }
-            ]
-          }),
-          max_tokens: 300,
-          temperature: 0.7
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${process.env.LLAMA4_API_KEY}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      
-      generatedDescription = llama4Response?.data?.choices[0]?.text;
       console.log('Successfully received description from Llama API:', generatedDescription);
     } catch (apiError) {
       console.log('Error calling Llama API:', apiError.message);
-      console.log('API Error details:', apiError.response?.data || 'No detailed error data');
       
       // For demo purposes, if the API call fails, generate a mock response
       console.log('Falling back to mock response');
@@ -388,6 +364,152 @@ app.get('/api/test', (req, res) => {
     success: true,
     message: 'Backend API is working correctly'
   });
+});
+
+// Endpoint for processing individual video chunks
+app.post('/api/process-chunk', upload.single('video'), async (req, res) => {
+  const tempFiles = [];
+  try {
+    console.log('Received video chunk upload request');
+    
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No video file uploaded' });
+    }
+    
+    // Get start and end times from request
+    const startTime = parseFloat(req.body.startTime) || 0;
+    const endTime = parseFloat(req.body.endTime) || 9;
+    
+    console.log(`Processing video chunk: ${startTime}s to ${endTime}s`);
+    console.log(`Video chunk uploaded: ${req.file.originalname}, size: ${req.file.size} bytes`);
+    
+    const videoPath = req.file.path;
+    tempFiles.push(videoPath);
+    
+    // 1. Create temp directory for processing
+    const processingDir = path.join(__dirname, 'processing', `chunk-${Date.now()}`);
+    fs.mkdirSync(processingDir, { recursive: true });
+    console.log(`Created processing directory: ${processingDir}`);
+    
+    // 2. Extract frames from video chunk
+    const framesDir = path.join(processingDir, 'frames');
+    fs.mkdirSync(framesDir, { recursive: true });
+    console.log(`Created frames directory: ${framesDir}`);
+    
+    console.log('Extracting frames from video chunk...');
+    const framesPaths = await extractFrames(videoPath, framesDir, 9, startTime, endTime);
+    console.log(`Extracted ${framesPaths.length} frames from video chunk`);
+    tempFiles.push(...framesPaths);
+    
+    // 3. Extract audio and transcribe
+    const audioPath = path.join(processingDir, 'audio.wav');
+    tempFiles.push(audioPath);
+    
+    console.log('Extracting audio from video chunk...');
+    const chunkDuration = endTime - startTime;
+    await extractAudio(videoPath, audioPath, startTime, chunkDuration);
+    console.log(`Audio extracted to: ${audioPath} (${chunkDuration}s from ${startTime}s)`);
+    
+    // Choose one transcription method based on environment setup:
+    let transcript;
+    console.log('Starting transcription process...');
+    try {
+      // Try Python script first
+      console.log('Attempting transcription with Python script...');
+      transcript = await transcribeWithPython(audioPath);
+      console.log('Python transcription successful');
+    } catch (pythonError) {
+      console.log('Python transcription failed, falling back to OpenAI API:', pythonError.message);
+      
+      try {
+        // Fall back to OpenAI API
+        console.log('Attempting transcription with OpenAI API...');
+        transcript = await transcribeWithOpenAI(audioPath);
+        console.log('OpenAI API transcription successful');
+      } catch (apiError) {
+        console.log('OpenAI API transcription failed, using mock transcript:', apiError.message);
+        
+        // If both methods fail, use a mock transcript based on the video filename
+        const videoFileName = path.basename(videoPath);
+        transcript = `This is a mock transcript for the video chunk "${videoFileName}" from ${startTime}s to ${endTime}s.`;
+        console.log('Using mock transcript for testing purposes');
+      }
+    }
+    
+    console.log('Transcript:', transcript.substring(0, 100) + (transcript.length > 100 ? '...' : ''));
+    
+    // 4. Call Llama API for description generation
+    console.log('Calling Llama API for chunk description generation...');
+    let generatedDescription;
+    
+    try {
+      // Use the integrated Llama API with segmentation for longer videos
+      console.log(`Sending request to Llama API with transcript and ${framesPaths.length} frames`);
+      
+      // Pass the startTime and endTime to the generateVideoDescription function
+      generatedDescription = await generateVideoDescription(transcript, framesPaths, startTime, endTime);
+      
+      if (!generatedDescription || generatedDescription.trim() === '') {
+        throw new Error('Empty response from Llama API');
+      }
+      
+      console.log('Successfully received description from Llama API:', generatedDescription);
+    } catch (apiError) {
+      console.log('Error calling Llama API:', apiError.message);
+      
+      // For demo purposes, if the API call fails, generate a mock response
+      console.log('Falling back to mock response');
+      
+      // Create a more realistic mock response based on the transcript
+      let mockDescription;
+      if (transcript && transcript.length > 0) {
+        mockDescription = `This video chunk from ${startTime}s to ${endTime}s contains audio where someone is saying: "${transcript.substring(0, 50)}${transcript.length > 50 ? '...' : ''}". `;
+        mockDescription += 'The scene shows people interacting with clear visibility and good lighting.';
+      } else {
+        mockDescription = `This video chunk from ${startTime}s to ${endTime}s shows a scene with people and objects. The video quality is clear.`;
+      }
+      
+      generatedDescription = mockDescription;
+    }
+    
+    // 5. Clean up and return response
+    console.log('Cleaning up temporary files...');
+    cleanupFiles(tempFiles);
+    if (fs.existsSync(processingDir)) {
+      fs.rmdirSync(processingDir, { recursive: true });
+      console.log(`Removed processing directory: ${processingDir}`);
+    }
+    
+    console.log('Sending chunk response to client');
+    res.json({
+      success: true,
+      script: generatedDescription,
+      startTime,
+      endTime
+    });
+    
+  } catch (error) {
+    console.error('Error processing video chunk:', error);
+    
+    // Clean up on error too
+    cleanupFiles(tempFiles);
+    
+    // Provide more specific error messages based on the error type
+    let errorMessage = error.message;
+    if (error.message.includes('ffmpeg')) {
+      errorMessage = 'Error processing video chunk: FFmpeg failed. Please check if the video format is supported.';
+    } else if (error.message.includes('transcription')) {
+      errorMessage = 'Error transcribing audio: The audio could not be transcribed. Please check if the video has clear audio.';
+    } else if (error.message.includes('API')) {
+      errorMessage = 'Error calling AI service: The AI service could not process the video chunk. Please try again later.';
+    }
+    
+    res.status(500).json({ 
+      success: false, 
+      error: errorMessage,
+      details: error.message // Include original error for debugging
+    });
+  }
 });
 
 // Start the server
