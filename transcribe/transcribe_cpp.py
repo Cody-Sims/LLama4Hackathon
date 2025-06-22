@@ -41,9 +41,7 @@ def main():
         text = run_cpp(wav, args.lang, args.threads)
 
     if args.out:
-        with open(args.out, "w", encoding="utf-8") as f:
-            f.write(text + "\n")
-        print(f"✅ Transcript written to {args.out}")
+        return text
     else:
         print(text)
 
