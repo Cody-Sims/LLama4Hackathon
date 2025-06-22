@@ -19,7 +19,7 @@ def base642video(base64_video:str, request_guid:str) -> list:
     Path(f"/root/app/data/video/{request_guid}.mp4").write_bytes(base64.b64decode(b64))
 
 # split video and do video2text
-def split_video_and_to_text(video_path:str, segment_length=8) -> list:
+def split_video_and_to_text(video_path:str, segment_length=9) -> list:
     clip = VideoFileClip(video_path)
     duration = int(clip.duration)
     video_text = []

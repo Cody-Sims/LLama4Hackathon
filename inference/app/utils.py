@@ -10,10 +10,11 @@ def response_description_streaming(model, group, group_video, requirement, reque
     
     # post to inference API (and save all record)
     all_result = ""
-    n = 8
+    n = 9
     try:
         for i in range(len(group)):
             transcribed_audio = group_video[i]
+            logger.info(f"video text: {transcribed_audio}")
             post_content_prefix = [
                 {
                     "type": "text",
