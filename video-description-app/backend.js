@@ -485,7 +485,12 @@ app.post('/api/process-chunk', upload.single('video'), async (req, res) => {
       success: true,
       script: generatedDescription,
       startTime,
-      endTime
+      endTime,
+      metadata: {
+        startTime,
+        endTime,
+        timestamp: new Date().toISOString()
+      }
     });
     
   } catch (error) {

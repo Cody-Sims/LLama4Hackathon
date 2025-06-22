@@ -115,7 +115,13 @@ function App() {
         
         // Update the script text with all processed chunks
         if (result && result.success) {
-          const combinedScript = chunkProcessorRef.current.getCombinedScript();
+          // Get all successful chunks
+          const allChunks = chunkProcessorRef.current.getResults()
+            .filter(r => r && r.success)
+            .map(r => r.script);
+          
+          // Join all chunks with newlines
+          const combinedScript = allChunks.join('\n\n');
           console.log('Updated script:', combinedScript);
           setScriptText(combinedScript);
         }

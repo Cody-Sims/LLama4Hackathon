@@ -277,8 +277,13 @@ export async function generateVideoDescription(transcript, framesPaths, startTim
     const currentChunkKey = Math.floor(startTime / 9);
     previousDescriptions[currentChunkKey] = description;
     
-    // Format the description with timestamps
-    const formattedDescription = endTime ? `[${startTime}s-${endTime}s] ${description}` : description;
+    // Store metadata separately instead of embedding timestamps in the text
+    const result = {
+      text: description,
+      startTime: startTime,
+      endTime: endTime || startTime + framesPaths.length,
+      timestamp: new Date().toISOString()
+    };
     
     // Save the result to a file for debugging
     const requestGuid = Date.now().toString();
@@ -286,9 +291,9 @@ export async function generateVideoDescription(transcript, framesPaths, startTim
     if (!fs.existsSync(recordDir)) {
       fs.mkdirSync(recordDir, { recursive: true });
     }
-    fs.writeFileSync(path.join(recordDir, `${requestGuid}.txt`), formattedDescription);
+    fs.writeFileSync(path.join(recordDir, `${requestGuid}.txt`), JSON.stringify(result, null, 2));
     
-    return formattedDescription;
+    return description;
   } catch (error) {
     console.error('Error generating video description:', error);
     return "";

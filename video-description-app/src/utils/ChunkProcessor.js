@@ -227,7 +227,7 @@ export class ChunkProcessor {
   getCombinedScript() {
     return this.results
       .filter(result => result && result.success)
-      .map(result => `[${result.startTime}s-${result.endTime}s] ${result.script}`)
+      .map(result => result.script)
       .join('\n\n');
   }
 }
