@@ -1,12 +1,29 @@
 import { useState, useEffect } from 'react'
 
-const VoiceCustomization = ({ onVoiceChange, scriptText }) => {
+const VoiceCustomization = ({ onVoiceChange, scriptText, detectedLanguage = 'en' }) => {
   const [voices, setVoices] = useState([])
   const [selectedVoice, setSelectedVoice] = useState(null)
-  const [selectedLanguage, setSelectedLanguage] = useState('en') // Default to English
+  const [selectedLanguage, setSelectedLanguage] = useState(detectedLanguage) // Use detected language
   const [rate, setRate] = useState(1)
   const [pitch, setPitch] = useState(1)
   const [isPlaying, setIsPlaying] = useState(false)
+  
+  // Map of language codes to their full language codes for voice selection
+  const languageMap = {
+    'en': ['en', 'en-US', 'en-GB', 'en-AU', 'en-CA', 'en-IN', 'en-IE', 'en-NZ', 'en-ZA'],
+    'zh': ['zh', 'zh-CN', 'zh-TW', 'zh-HK'],
+    'es': ['es', 'es-ES', 'es-MX', 'es-AR', 'es-CO', 'es-CL'],
+    'fr': ['fr', 'fr-FR', 'fr-CA', 'fr-BE', 'fr-CH'],
+    'de': ['de', 'de-DE', 'de-AT', 'de-CH'],
+    'ja': ['ja', 'ja-JP'],
+    'ko': ['ko', 'ko-KR'],
+    'ru': ['ru', 'ru-RU'],
+    'ar': ['ar', 'ar-SA', 'ar-EG'],
+    'hi': ['hi', 'hi-IN'],
+    'pt': ['pt', 'pt-BR', 'pt-PT'],
+    'it': ['it', 'it-IT'],
+    'nl': ['nl', 'nl-NL', 'nl-BE']
+  }
   
   // Load available voices
   useEffect(() => {
@@ -16,16 +33,34 @@ const VoiceCustomization = ({ onVoiceChange, scriptText }) => {
       if (availableVoices.length > 0) {
         setVoices(availableVoices)
         
-        // Set default voice (preferably English)
-        const defaultVoice = availableVoices.find(voice => voice.lang.startsWith('en')) || availableVoices[0]
-        setSelectedVoice(defaultVoice)
+        // Find a voice that matches the detected language
+        let matchedVoice = null;
         
-        // Set default language based on the default voice
-        if (defaultVoice) {
-          setSelectedLanguage(defaultVoice.lang.split('-')[0])
+        // Get the list of compatible language codes for the detected language
+        const compatibleCodes = languageMap[detectedLanguage] || [detectedLanguage];
+        
+        // Try to find a voice that matches one of the compatible language codes
+        for (const langCode of compatibleCodes) {
+          matchedVoice = availableVoices.find(voice => voice.lang.startsWith(langCode));
+          if (matchedVoice) break;
         }
         
-        onVoiceChange({ voice: defaultVoice, rate, pitch })
+        // If no match found, fall back to English or the first available voice
+        if (!matchedVoice) {
+          console.log(`No voice found for language ${detectedLanguage}, falling back to English`);
+          matchedVoice = availableVoices.find(voice => voice.lang.startsWith('en')) || availableVoices[0];
+        }
+        
+        console.log(`Selected voice: ${matchedVoice?.name} (${matchedVoice?.lang}) for language: ${detectedLanguage}`);
+        setSelectedVoice(matchedVoice);
+        
+        // Set language based on the matched voice
+        if (matchedVoice) {
+          const voiceLang = matchedVoice.lang.split('-')[0];
+          setSelectedLanguage(voiceLang);
+        }
+        
+        onVoiceChange({ voice: matchedVoice, rate, pitch });
       }
     }
     
@@ -42,7 +77,7 @@ const VoiceCustomization = ({ onVoiceChange, scriptText }) => {
         window.speechSynthesis.onvoiceschanged = null
       }
     }
-  }, [onVoiceChange, rate, pitch])
+  }, [onVoiceChange, rate, pitch, detectedLanguage])
   
   // Group voices by language
   const voicesByLanguage = voices.reduce((acc, voice) => {

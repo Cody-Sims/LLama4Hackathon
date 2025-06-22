@@ -1,4 +1,4 @@
-const DescriptionPanel = ({ scriptText, isGenerating, error }) => {
+const DescriptionPanel = ({ scriptText, isGenerating, error, processingProgress = 0 }) => {
   return (
     <div>
       <div style={{ 
@@ -66,8 +66,33 @@ const DescriptionPanel = ({ scriptText, isGenerating, error }) => {
             ></path>
           </svg>
           <div>
-            <p style={{ color: '#4b5563', margin: 0 }}>Generating description...</p>
-            <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: 0 }}>This may take a few moments</p>
+            <p style={{ color: '#4b5563', margin: 0 }}>
+              Generating description... {processingProgress > 0 ? `${Math.round(processingProgress)}%` : ''}
+            </p>
+            <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: 0 }}>
+              Processing video in chunks - you can start watching while descriptions are being generated
+            </p>
+            <div style={{ 
+              width: '100%', 
+              height: '0.5rem', 
+              backgroundColor: '#e2e8f0', 
+              borderRadius: '0.25rem', 
+              marginTop: '0.5rem',
+              overflow: 'hidden' 
+            }}>
+              <div style={{ 
+                width: `${processingProgress}%`, 
+                height: '100%', 
+                backgroundColor: '#3b82f6', 
+                transition: 'width 0.3s ease' 
+              }} />
+            </div>
+            <ul style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0.5rem 0 0 0', paddingLeft: '1.25rem' }}>
+              <li>Extracting video frames</li>
+              <li>Transcribing audio</li>
+              <li>Analyzing content with AI</li>
+              <li>Processing {Math.round(processingProgress)}% complete</li>
+            </ul>
           </div>
         </div>
       ) : error ? (
