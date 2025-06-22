@@ -15,7 +15,6 @@ const t0 = performance.now();
 const cache = new Map(); 
 
 function warmUpFfmpeg() {
-  console.log('[startup] warming up ffmpeg …');
   const t0 = performance.now();
   spawn('ffmpeg', ['-version'])
     .on('exit', () =>
@@ -236,7 +235,7 @@ const transcribeWithPython = (audioPath, modelSize = 'small') => {
     // Use the Python interpreter from the virtual environment
     const venvPythonPath = path.resolve(path.join(__dirname, '..', 'venv', 'bin', 'python'));
     const pythonCommand = fs.existsSync(venvPythonPath) ? venvPythonPath : 'python';
-    console.log(`Using Python interpreter: ${pythonCommand}`);
+    // console.log(`Using Python interpreter: ${pythonCommand}`);
     
     const pythonProcess = spawn(pythonCommand, [
       scriptPath,
@@ -271,7 +270,6 @@ const transcribeWithPython = (audioPath, modelSize = 'small') => {
 
 // Helper function to transcribe audio using OpenAI API
 const transcribeWithOpenAI = async (audioPath) => {
-  console.log("transcribe w openai not cpp")
   const formData = new FormData();
   formData.append('file', fs.createReadStream(audioPath));
   formData.append('model', 'whisper-1');
@@ -294,7 +292,7 @@ const cleanupFiles = (filePaths) => {
   filePaths.forEach(filePath => {
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
-      console.log(`Deleted temporary file: ${filePath}`);
+      // console.log(`Deleted temporary file: ${filePath}`);
     }
   });
 };
