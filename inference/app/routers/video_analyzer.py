@@ -21,7 +21,8 @@ from module.post_module import (
 )
 from module.video_module import (
     load_video2post,
-    base642video
+    base642video,
+    split_video_and_to_text
 )
 from utils import (
     response_description_streaming
@@ -52,10 +53,22 @@ async def video_analyze(Videoinput: Videoinput):
 
     # video processing
     try:
+        logger.info("transform to video")
         base642video(video_content, request_guid)
+        logger.info("transform to video: done")
+        # split video 
+        logger.info("split the video")
+        video_split_start = time.time()
+        group_video = split_video_and_to_text(f"/root/app/data/video/{request_guid}.mp4")
+        video_split_end = time.time()
+        video_splot_cost = round(video_split_end - video_split_start,2)
+        logger.info(f"split the video: done ({video_splot_cost}s)")
+        logger.info("get images")
         group = load_video2post(f"/root/app/data/video/{request_guid}.mp4")
-        print("video pre-processing done.")
-        return StreamingResponse(response_description_streaming(model, group, requirement, request_guid), media_type="text/plain")
+        logger.info("get images: done")
+ 
+        logger.info("video pre-processing done.")
+        return StreamingResponse(response_description_streaming(model, group, group_video, requirement, request_guid), media_type="text/plain")
     except:
         print(traceback.format_exc())
 

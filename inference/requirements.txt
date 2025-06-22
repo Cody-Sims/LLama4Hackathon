@@ -4,3 +4,5 @@ requests
 logzero
 llama_api_client
 opencv-python
+moviepy
+openai-whisper
