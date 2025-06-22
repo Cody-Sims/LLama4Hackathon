@@ -45,8 +45,8 @@ export async function post2inference(model, system, content, max_tokens = 256, t
     "Authorization": `Bearer ${API_KEY}`
   };
   
-  // Add a reminder about the word limit to the system prompt
-  const enhancedSystem = system + "\n\nREMINDER: Your response MUST be 25 words or less. This is a hard requirement.";
+  // Add a reminder about the word limit and language to the system prompt
+  const enhancedSystem = system + "\n\nREMINDER: Your response MUST be 25 words or less. This is a hard requirement. Also, ensure your response is in the specified language only.";
   
   const postjson = {
     "model": model,
@@ -104,7 +104,7 @@ export async function processVideoFrames(framesPaths, language = 'en') {
   // Add text prefix with focus on continuity, brevity, and language
   contentArray.push({
     type: "text",
-    text: `You are an accessibility assistant describing a video for vision-impaired users. Your description must be under 25 words and will be played alongside the video.\n\nIMPORTANT: Generate your description in ${languageName}. Your entire response should be in ${languageName} only.\n\nFocus on creating a continuous narrative that flows naturally from one segment to the next. Each segment should build on the previous one without repeating information.\n\nDescribe the attached photos and transcribed audio in a concise, storytelling tone. Process the images in order and focus on what's happening in this specific segment of the video.\n\nKeep your description under 25 words while maintaining clarity and continuity.`
+    text: `You are an accessibility assistant describing a video for vision-impaired users. Your description must be under 25 words and will be played alongside the video.\n\nIMPORTANT: Generate your description in ${languageName}. Your entire response should be in ${languageName} only.\n\nFocus on creating a continuous narrative that flows naturally from one segment to the next. Each segment should build on the previous one without repeating information.\n\nDescribe the attached photos and transcribed audio in a concise, storytelling tone. Process the images in order and focus on what's happening in this specific segment of the video.\n\nKeep your description under 25 words while maintaining clarity and continuity in ${languageName}.`
   });
   
   // Add frames as image_url objects - limit to max 9 frames (1 per second for a 9-second segment)
@@ -269,8 +269,8 @@ export async function generateVideoDescription(transcript, framesPaths, startTim
     
     // System message that emphasizes continuity, brevity, and language
     const system = previousDescription 
-      ? `Continue the narrative from the previous description. Be concise (under 25 words) and avoid repetition. Generate your response in ${languageName} only.`
-      : `Provide a concise description (under 25 words) of what's happening in the video. Generate your response in ${languageName} only.`;
+      ? `Continue the narrative from the previous description. Be concise (under 25 words) and avoid repetition. IMPORTANT: Generate your response in ${languageName} only. Your entire response must be in ${languageName}.`
+      : `Provide a concise description (under 25 words) of what's happening in the video. IMPORTANT: Generate your response in ${languageName} only. Your entire response must be in ${languageName}.`;
     
     // Try up to 3 times to get a good response
     let description = "";

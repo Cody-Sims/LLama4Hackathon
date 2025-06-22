@@ -39,39 +39,85 @@ import { generateVideoDescription } from './llama_api.js';
 // Language detection function
 function detectTranscriptLanguage(transcript) {
   if (!transcript || typeof transcript !== 'string' || transcript.trim().length === 0) {
+    console.log('Empty transcript, defaulting to English');
     return 'en'; // Default to English for empty transcript
+  }
+  
+  // Log the first 100 characters of the transcript for debugging
+  console.log(`Detecting language for transcript: ${transcript.substring(0, 100)}${transcript.length > 100 ? '...' : ''}`);
+  
+  // Check if transcript contains mostly non-speech indicators
+  const nonSpeechPatterns = [
+    /\[.*music.*\]/i, 
+    /\[.*background.*\]/i, 
+    /\[.*noise.*\]/i,
+    /\[.*sound.*\]/i,
+    /\[.*silence.*\]/i,
+    /\[.*inaudible.*\]/i,
+    /\[.*instrumental.*\]/i,
+    /\(.*music.*\)/i,
+    /\(.*background.*\)/i,
+    /\(.*noise.*\)/i,
+    /\(.*sound.*\)/i,
+    /\(.*silence.*\)/i,
+    /\(.*inaudible.*\)/i,
+    /\(.*instrumental.*\)/i
+  ];
+  
+  let nonSpeechMatches = 0;
+  for (const pattern of nonSpeechPatterns) {
+    if (pattern.test(transcript)) {
+      nonSpeechMatches++;
+    }
+  }
+  
+  // If transcript is very short or mostly non-speech indicators, default to English
+  if (transcript.length < 15 || (nonSpeechMatches > 0 && transcript.length < 50)) {
+    console.log(`Transcript appears to be mostly non-speech (${nonSpeechMatches} indicators) or very short (${transcript.length} chars), defaulting to English`);
+    return 'en';
   }
   
   // Check for specific character ranges first (more reliable for some languages)
   
-  // Chinese characters
-  if (/[\u4e00-\u9fa5]/.test(transcript)) {
-    console.log("Detected Chinese characters in transcript");
+  // Chinese characters - check for significant presence (more than just a few characters)
+  const chineseCharCount = (transcript.match(/[\u4e00-\u9fa5]/g) || []).length;
+  if (chineseCharCount > 5 || (chineseCharCount > 0 && chineseCharCount / transcript.length > 0.1)) {
+    console.log(`Detected ${chineseCharCount} Chinese characters in transcript`);
     return 'zh';
   }
   
   // Japanese characters (Hiragana and Katakana)
-  if (/[\u3040-\u30ff]/.test(transcript)) {
+  const japaneseCharCount = (transcript.match(/[\u3040-\u30ff]/g) || []).length;
+  if (japaneseCharCount > 5 || (japaneseCharCount > 0 && japaneseCharCount / transcript.length > 0.1)) {
+    console.log(`Detected ${japaneseCharCount} Japanese characters in transcript`);
     return 'ja';
   }
   
   // Korean characters (Hangul)
-  if (/[\uac00-\ud7af]/.test(transcript)) {
+  const koreanCharCount = (transcript.match(/[\uac00-\ud7af]/g) || []).length;
+  if (koreanCharCount > 5 || (koreanCharCount > 0 && koreanCharCount / transcript.length > 0.1)) {
+    console.log(`Detected ${koreanCharCount} Korean characters in transcript`);
     return 'ko';
   }
   
   // Arabic characters
-  if (/[\u0600-\u06ff]/.test(transcript)) {
+  const arabicCharCount = (transcript.match(/[\u0600-\u06ff]/g) || []).length;
+  if (arabicCharCount > 5 || (arabicCharCount > 0 && arabicCharCount / transcript.length > 0.1)) {
+    console.log(`Detected ${arabicCharCount} Arabic characters in transcript`);
     return 'ar';
   }
   
   // Cyrillic characters (Russian, etc.)
-  if (/[\u0400-\u04ff]/.test(transcript)) {
+  const cyrillicCharCount = (transcript.match(/[\u0400-\u04ff]/g) || []).length;
+  if (cyrillicCharCount > 5 || (cyrillicCharCount > 0 && cyrillicCharCount / transcript.length > 0.1)) {
+    console.log(`Detected ${cyrillicCharCount} Cyrillic characters in transcript`);
     return 'ru';
   }
   
   // Devanagari (Hindi, etc.)
-  if (/[\u0900-\u097f]/.test(transcript)) {
+  const devanagariCharCount = (transcript.match(/[\u0900-\u097f]/g) || []).length;
+  if (devanagariCharCount > 5 || (devanagariCharCount > 0 && devanagariCharCount / transcript.length > 0.1)) {
+    console.log(`Detected ${devanagariCharCount} Devanagari characters in transcript`);
     return 'hi';
   }
   
@@ -80,13 +126,13 @@ function detectTranscriptLanguage(transcript) {
   
   // Common words and patterns for different languages
   const languagePatterns = {
-    'en': ['the', 'and', 'is', 'in', 'to', 'it', 'that', 'for', 'you', 'with', 'using', 'module', 'directly'],
-    'es': ['el', 'la', 'los', 'las', 'y', 'es', 'en', 'que', 'por', 'para'],
-    'fr': ['le', 'la', 'les', 'et', 'est', 'en', 'que', 'pour', 'dans', 'un'],
-    'de': ['der', 'die', 'das', 'und', 'ist', 'in', 'zu', 'den', 'mit', 'für'],
-    'it': ['il', 'la', 'i', 'le', 'e', 'è', 'in', 'che', 'per', 'un'],
-    'pt': ['o', 'a', 'os', 'as', 'e', 'é', 'em', 'que', 'para', 'um'],
-    'nl': ['de', 'het', 'een', 'en', 'is', 'in', 'te', 'dat', 'van', 'voor']
+    'en': ['the', 'and', 'is', 'in', 'to', 'it', 'that', 'for', 'you', 'with', 'this', 'have', 'are', 'on', 'not', 'was', 'we', 'they', 'but', 'what'],
+    'es': ['el', 'la', 'los', 'las', 'y', 'es', 'en', 'que', 'por', 'para', 'un', 'una', 'no', 'con', 'se', 'lo', 'como', 'más', 'pero', 'sus'],
+    'fr': ['le', 'la', 'les', 'et', 'est', 'en', 'que', 'pour', 'dans', 'un', 'une', 'du', 'des', 'ce', 'pas', 'sur', 'qui', 'au', 'avec', 'plus'],
+    'de': ['der', 'die', 'das', 'und', 'ist', 'in', 'zu', 'den', 'mit', 'für', 'von', 'auf', 'dem', 'nicht', 'ein', 'eine', 'sich', 'auch', 'es', 'bei'],
+    'it': ['il', 'la', 'i', 'le', 'e', 'è', 'in', 'che', 'per', 'un', 'una', 'non', 'con', 'sono', 'di', 'del', 'della', 'questo', 'questa', 'come'],
+    'pt': ['o', 'a', 'os', 'as', 'e', 'é', 'em', 'que', 'para', 'um', 'uma', 'não', 'com', 'se', 'na', 'por', 'mais', 'do', 'da', 'no'],
+    'nl': ['de', 'het', 'een', 'en', 'is', 'in', 'te', 'dat', 'van', 'voor', 'op', 'niet', 'met', 'zijn', 'hij', 'ik', 'je', 'zij', 'we', 'maar']
   };
   
   // Count matches for each language
@@ -104,15 +150,30 @@ function detectTranscriptLanguage(transcript) {
   // Find the language with the most matches
   let bestMatch = 'en';
   let maxMatches = 0;
+  
+  console.log('Language match scores:');
   for (const [lang, count] of Object.entries(matches)) {
+    console.log(`${lang}: ${count} matches`);
     if (count > maxMatches) {
       maxMatches = count;
       bestMatch = lang;
     }
   }
   
-  // If no good matches, default to English
-  return maxMatches > 0 ? bestMatch : 'en';
+  // If no good matches or very few matches, default to English
+  if (maxMatches < 3) {
+    console.log(`Insufficient matches (${maxMatches}), defaulting to English`);
+    return 'en';
+  }
+  
+  // If the transcript is very short and we don't have strong confidence, default to English
+  if (transcript.length < 30 && maxMatches < 5) {
+    console.log(`Short transcript (${transcript.length} chars) with low confidence (${maxMatches} matches), defaulting to English`);
+    return 'en';
+  }
+  
+  console.log(`Best language match: ${bestMatch} with ${maxMatches} matches`);
+  return bestMatch;
 };
 
 // Load environment variables
@@ -367,10 +428,14 @@ app.post('/api/process-video', upload.single('video'), async (req, res) => {
     let generatedDescription;
     
     try {
+      // Detect the language of the transcript
+      const detectedLanguage = detectTranscriptLanguage(transcript);
+      console.log(`Detected language: ${detectedLanguage}`);
+      
       // Use the integrated Llama API with segmentation for longer videos
-      console.log(`Sending request to Llama API with transcript and ${framesPaths.length} frames`);
+      console.log(`Sending request to Llama API with transcript and ${framesPaths.length} frames in ${detectedLanguage}`);
       console.log(`Video duration detected: ${framesPaths.length} seconds (assuming 1 frame per second)`);
-      generatedDescription = await generateVideoDescription(transcript, framesPaths);
+      generatedDescription = await generateVideoDescription(transcript, framesPaths, 0, null, detectedLanguage);
       
       if (!generatedDescription || generatedDescription.trim() === '') {
         throw new Error('Empty response from Llama API');
@@ -407,7 +472,11 @@ app.post('/api/process-video', upload.single('video'), async (req, res) => {
     console.log('Sending response to client');
     res.json({
       success: true,
-      script: generatedDescription
+      script: generatedDescription,
+      metadata: {
+        language: detectedLanguage,
+        timestamp: new Date().toISOString()
+      }
     });
     
   } catch (error) {

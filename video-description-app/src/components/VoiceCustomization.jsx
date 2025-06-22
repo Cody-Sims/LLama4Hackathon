@@ -33,32 +33,52 @@ const VoiceCustomization = ({ onVoiceChange, scriptText, detectedLanguage = 'en'
       if (availableVoices.length > 0) {
         setVoices(availableVoices)
         
-        // Find a voice that matches the detected language
+        // Find a voice that matches the detected language, preferring Google voices
         let matchedVoice = null;
         
         // Get the list of compatible language codes for the detected language
         const compatibleCodes = languageMap[detectedLanguage] || [detectedLanguage];
         
-        // Try to find a voice that matches one of the compatible language codes
+        // First try to find a Google voice that matches one of the compatible language codes
         for (const langCode of compatibleCodes) {
-          matchedVoice = availableVoices.find(voice => voice.lang.startsWith(langCode));
-          if (matchedVoice) break;
+          matchedVoice = availableVoices.find(voice => 
+            voice.lang.startsWith(langCode) && voice.name.includes('Google'));
+          if (matchedVoice) {
+            console.log(`Found Google voice for ${langCode}: ${matchedVoice.name}`);
+            break;
+          }
         }
         
-        // If no match found, fall back to English or the first available voice
+        // If no Google voice found, try any voice that matches the language
         if (!matchedVoice) {
-          console.log(`No voice found for language ${detectedLanguage}, falling back to English`);
+          for (const langCode of compatibleCodes) {
+            matchedVoice = availableVoices.find(voice => voice.lang.startsWith(langCode));
+            if (matchedVoice) {
+              console.log(`Found non-Google voice for ${langCode}: ${matchedVoice.name}`);
+              break;
+            }
+          }
+        }
+        
+        // If no match found, try to find a Google English voice
+        if (!matchedVoice) {
+          console.log(`No voice found for language ${detectedLanguage}, looking for Google English voice`);
+          matchedVoice = availableVoices.find(voice => 
+            voice.lang.startsWith('en') && voice.name.includes('Google'));
+        }
+        
+        // If still no match, fall back to any English voice or the first available voice
+        if (!matchedVoice) {
+          console.log(`No Google English voice found, falling back to any English voice`);
           matchedVoice = availableVoices.find(voice => voice.lang.startsWith('en')) || availableVoices[0];
         }
         
         console.log(`Selected voice: ${matchedVoice?.name} (${matchedVoice?.lang}) for language: ${detectedLanguage}`);
         setSelectedVoice(matchedVoice);
         
-        // Set language based on the matched voice
-        if (matchedVoice) {
-          const voiceLang = matchedVoice.lang.split('-')[0];
-          setSelectedLanguage(voiceLang);
-        }
+        // Always use the detected language from props first, then fallback to matched voice
+        setSelectedLanguage(detectedLanguage || (matchedVoice ? matchedVoice.lang.split('-')[0] : 'en'));
+        console.log(`Setting selected language to: ${detectedLanguage} (from detected language)`)
         
         onVoiceChange({ voice: matchedVoice, rate, pitch });
       }
@@ -92,6 +112,65 @@ const VoiceCustomization = ({ onVoiceChange, scriptText, detectedLanguage = 'en'
   // Get unique languages
   const languages = Object.keys(voicesByLanguage).sort()
   
+  // Update selected language when detected language changes
+  useEffect(() => {
+    console.log(`Detected language changed to: ${detectedLanguage}`);
+    setSelectedLanguage(detectedLanguage);
+    
+    // Try to find a matching voice for the new language, preferring Google voices
+    if (voices.length > 0) {
+      const compatibleCodes = languageMap[detectedLanguage] || [detectedLanguage];
+      let matchedVoice = null;
+      
+      // First try to find a Google voice for the language
+      for (const langCode of compatibleCodes) {
+        matchedVoice = voices.find(voice => 
+          voice.lang.startsWith(langCode) && voice.name.includes('Google'));
+        if (matchedVoice) {
+          console.log(`Found Google voice for ${detectedLanguage}: ${matchedVoice.name}`);
+          break;
+        }
+      }
+      
+      // If no Google voice found, try any voice for the language
+      if (!matchedVoice) {
+        for (const langCode of compatibleCodes) {
+          matchedVoice = voices.find(voice => voice.lang.startsWith(langCode));
+          if (matchedVoice) {
+            console.log(`Found non-Google voice for ${detectedLanguage}: ${matchedVoice.name}`);
+            break;
+          }
+        }
+      }
+      
+      // If no match found, try to find a Google English voice
+      if (!matchedVoice) {
+        console.log(`No voice found for language ${detectedLanguage}, looking for Google English voice`);
+        matchedVoice = voices.find(voice => 
+          voice.lang.startsWith('en') && voice.name.includes('Google'));
+        
+        if (matchedVoice) {
+          console.log(`Using Google English voice: ${matchedVoice.name}`);
+        }
+      }
+      
+      // If still no match, fall back to any English voice
+      if (!matchedVoice) {
+        console.log(`No Google English voice found, falling back to any English voice`);
+        matchedVoice = voices.find(voice => voice.lang.startsWith('en')) || voices[0];
+        
+        if (matchedVoice) {
+          console.log(`Using fallback voice: ${matchedVoice.name}`);
+        }
+      }
+      
+      if (matchedVoice) {
+        setSelectedVoice(matchedVoice);
+        onVoiceChange({ voice: matchedVoice, rate, pitch });
+      }
+    }
+  }, [detectedLanguage, voices, onVoiceChange, rate, pitch, languageMap]);
+  
   // Get voices for the selected language
   const voicesForSelectedLanguage = voicesByLanguage[selectedLanguage] || []
   
@@ -99,12 +178,25 @@ const VoiceCustomization = ({ onVoiceChange, scriptText, detectedLanguage = 'en'
   const handleLanguageChange = (e) => {
     const newLanguage = e.target.value
     setSelectedLanguage(newLanguage)
+    console.log(`Language manually changed to: ${newLanguage}`)
     
-    // Select the first voice for this language
+    // Try to find a Google voice first
     if (voicesByLanguage[newLanguage] && voicesByLanguage[newLanguage].length > 0) {
-      const newVoice = voicesByLanguage[newLanguage][0]
-      setSelectedVoice(newVoice)
-      onVoiceChange({ voice: newVoice, rate, pitch })
+      // Look for a Google voice first
+      const googleVoice = voicesByLanguage[newLanguage].find(voice => 
+        voice.name.includes('Google'));
+      
+      if (googleVoice) {
+        console.log(`Selected Google voice for ${newLanguage}: ${googleVoice.name}`);
+        setSelectedVoice(googleVoice);
+        onVoiceChange({ voice: googleVoice, rate, pitch });
+      } else {
+        // Fall back to the first available voice for this language
+        const newVoice = voicesByLanguage[newLanguage][0];
+        console.log(`No Google voice available for ${newLanguage}, using: ${newVoice.name}`);
+        setSelectedVoice(newVoice);
+        onVoiceChange({ voice: newVoice, rate, pitch });
+      }
     }
   }
   

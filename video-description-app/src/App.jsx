@@ -22,6 +22,7 @@ function App() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState(null)
   const [detectedLanguage, setDetectedLanguage] = useState('en') // Default to English
+  const [hasDetectedLanguage, setHasDetectedLanguage] = useState(false) // Track if language was detected from content
   
   // State for voice customization
   const [voiceSettings, setVoiceSettings] = useState({
@@ -51,6 +52,7 @@ function App() {
       setProcessingProgress(0)
       setCurrentChunkIndex(-1)
       setDetectedLanguage('en') // Reset to default language
+      setHasDetectedLanguage(false) // Reset language detection flag
       
       // Split the video into chunks
       const videoChunks = await splitVideoIntoChunks(file);
@@ -130,7 +132,17 @@ function App() {
           // Check if we have language metadata and update the detected language
           if (result.metadata && result.metadata.language) {
             console.log(`Detected language from backend: ${result.metadata.language}`);
-            setDetectedLanguage(result.metadata.language);
+            
+            // Only update if we haven't already detected a non-English language
+            // or if this is a new non-English language
+            if (!hasDetectedLanguage || 
+                (result.metadata.language !== 'en' && detectedLanguage === 'en')) {
+              setDetectedLanguage(result.metadata.language);
+              setHasDetectedLanguage(true);
+              console.log(`Updated detected language to: ${result.metadata.language}`);
+            } else {
+              console.log(`Keeping existing detected language: ${detectedLanguage}`);
+            }
           }
         }
       });
@@ -193,6 +205,20 @@ function App() {
       
       if (data.success && data.script) {
         setScriptText(data.script);
+        
+        // Check if we have language metadata and update the detected language
+        if (data.metadata && data.metadata.language) {
+          console.log(`Detected language from backend: ${data.metadata.language}`);
+          
+          // Only update if it's a non-English language or we haven't detected a language yet
+          if (data.metadata.language !== 'en' || !hasDetectedLanguage) {
+            setDetectedLanguage(data.metadata.language);
+            setHasDetectedLanguage(true);
+            console.log(`Updated detected language to: ${data.metadata.language}`);
+          } else {
+            console.log(`Keeping existing detected language: ${detectedLanguage}`);
+          }
+        }
       } else {
         throw new Error('No description was generated');
       }
