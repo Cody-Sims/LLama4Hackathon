@@ -1,12 +1,6 @@
 Commands to run:
 
 ```
-brew install ffmpeg
-python3 -m venv venv && source venv/bin/activate
-pip install --upgrade openai-whisper torch
-
-pip install faster-whisper
-
 git clone https://github.com/ggerganov/whisper.cpp.git
 cd whisper.cpp
 make -j$(nproc)
