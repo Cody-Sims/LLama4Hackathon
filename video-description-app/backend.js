@@ -9,6 +9,30 @@ import FormData from 'form-data';
 import { spawn } from 'child_process';
 import dotenv from 'dotenv';
 import cors from 'cors';
+import { performance } from 'perf_hooks';
+
+const t0 = performance.now();   
+const cache = new Map(); 
+
+function warmUpFfmpeg() {
+  console.log('[startup] warming up ffmpeg …');
+  const t0 = performance.now();
+  spawn('ffmpeg', ['-version'])
+    .on('exit', () =>
+      console.log(`[startup] ffmpeg ready in ${((performance.now()-t0)/1000).toFixed(3)} s`)
+    )
+    .on('error', (e) => console.error('[startup] ffmpeg warm-up failed →', e));
+}
+warmUpFfmpeg();
+
+['log', 'info', 'warn', 'error'].forEach(method => {
+  const orig = console[method].bind(console);
+  console[method] = (...args) => {
+    const diffSec = ((performance.now() - t0) / 1000).toFixed(3); // 0.000-precision
+    orig(`[+${diffSec}s]`, ...args);
+  };
+});
+
 
 // Import Llama API functions
 import { generateVideoDescription } from './llama_api.js';
@@ -134,86 +158,68 @@ const upload = multer({
 });
 
 // Helper function to extract frames from video
-const extractFrames = (videoPath, outputDir, segmentDuration = 9, startTime = 0, endTime = null) => {
-  return new Promise((resolve, reject) => {
-    // Get video duration
-    ffmpeg.ffprobe(videoPath, (err, metadata) => {
-      if (err) return reject(err);
-      
-      const duration = metadata.format.duration;
-      const actualEndTime = endTime !== null ? Math.min(endTime, duration) : duration;
-      const actualDuration = actualEndTime - startTime;
-      
-      const framesPaths = [];
-      
-      // Calculate number of frames to extract (1 per second)
-      const numFrames = Math.ceil(actualDuration);
-      console.log(`Video chunk duration: ${actualDuration}s (from ${startTime}s to ${actualEndTime}s), extracting ${numFrames} frames`);
-      
-      // Create an array of promises for each screenshot
-      const screenshotPromises = [];
-      
-      // Take a frame every second within the specified time range
-      for (let second = 0; second < numFrames; second++) {
-        const timestamp = startTime + second;
-        
-        // Skip if timestamp exceeds end time
-        if (timestamp >= actualEndTime) continue;
-        
-        const outputPath = path.join(outputDir, `frame-${second}.png`);
-        framesPaths.push(outputPath);
-        
-        const promise = new Promise((resolveFrame, rejectFrame) => {
-          ffmpeg(videoPath)
-            .screenshots({
-              count: 1,
-              timestamps: [timestamp],
-              filename: `frame-${second}.png`,
-              folder: outputDir
-            })
-            .on('end', () => resolveFrame())
-            .on('error', (err) => rejectFrame(err));
-        });
-        
-        screenshotPromises.push(promise);
-      }
-      
-      // Wait for all screenshots to be taken
-      Promise.all(screenshotPromises)
-        .then(() => resolve(framesPaths))
-        .catch((err) => reject(err));
-    });
-  });
-};
+export function extractFrames(
+  videoPath,
+  outputDir,
+  startTime = 0,
+  endTime   = null,
+  fps       = 1
+) {
+  const chunkDuration = endTime !== null ? endTime - startTime : null;
+  if (chunkDuration !== null && chunkDuration <= 0) {
+    return Promise.resolve([]);          // nothing to do
+  }
 
-// Helper function to extract audio from video
-const extractAudio = (videoPath, outputPath, startTime = 0, duration = null) => {
   return new Promise((resolve, reject) => {
-    let ffmpegCommand = ffmpeg(videoPath);
-    
-    // If start time is specified, seek to that position
-    if (startTime > 0) {
-      ffmpegCommand = ffmpegCommand.seekInput(startTime);
+    // e.g. frame-00.png, frame-01.png …
+    const framePattern = path.join(outputDir, 'frame-%02d.png');
+    const ff = ffmpeg(videoPath)
+      .seekInput(startTime)
+      .output(framePattern)
+      .outputOptions(['-vf', `fps=${fps}`]);    // 1 fps → one frame per sec
+
+    if (chunkDuration !== null) {
+      ff.duration(chunkDuration);               // stop after N seconds
     }
-    
-    // If duration is specified, limit the duration
-    if (duration !== null) {
-      ffmpegCommand = ffmpegCommand.duration(duration);
-    }
-    
-    ffmpegCommand
-      .outputOptions([
-        '-vn',                  // No video
-        '-acodec', 'pcm_s16le', // 16-bit PCM
-        '-ar', '16000',         // 16 kHz
-        '-ac', '1'              // Mono
-      ])
-      .output(outputPath)
-      .on('end', () => resolve(outputPath))
-      .on('error', (err) => reject(err))
+
+    ff.on('end', () => {
+        // Collect list of files that got written
+        const frames = fs
+          .readdirSync(outputDir)
+          .filter((f) => f.startsWith('frame-') && f.endsWith('.png'))
+          .sort()                               // frame-00, frame-01, …
+          .map((f) => path.join(outputDir, f));
+        resolve(frames);
+      })
+      .on('error', reject)
       .run();
   });
-};
+}
+
+export function extractAudio(videoPath, outputPath, startTime = 0, duration = 9) {
+  return new Promise((resolve, reject) => {
+    ffmpeg()
+      .input(videoPath)
+      .inputOptions([
+        '-ss',            `${startTime}`,     // fast seek
+        '-t',             `${duration}`,      // hard stop
+        '-analyzeduration', '0',
+        '-probesize',      '1M',
+      ])
+      .outputOptions([
+        '-map', '0:a:0',
+        '-vn',
+        '-c:a', 'pcm_s16le',
+        '-ar',  '16000',
+        '-ac',  '1',
+        '-y',
+      ])
+      .output(outputPath)
+      .on('end',   () => resolve(outputPath))
+      .on('error', reject)
+      .run();
+  });
+}
 
 // Helper function to transcribe audio using Python script
 const transcribeWithPython = (audioPath, modelSize = 'small') => {
@@ -245,8 +251,6 @@ const transcribeWithPython = (audioPath, modelSize = 'small') => {
       transcript += chunk;
       console.log(`Python stdout: ${chunk}`);
     });
-
-    console.log("cpp transcript: " + transcript);
     
     pythonProcess.stderr.on('data', (data) => {
       const chunk = data.toString();
@@ -267,6 +271,7 @@ const transcribeWithPython = (audioPath, modelSize = 'small') => {
 
 // Helper function to transcribe audio using OpenAI API
 const transcribeWithOpenAI = async (audioPath) => {
+  console.log("transcribe w openai not cpp")
   const formData = new FormData();
   formData.append('file', fs.createReadStream(audioPath));
   formData.append('model', 'whisper-1');
@@ -322,14 +327,6 @@ app.post('/api/process-video', upload.single('video'), async (req, res) => {
     const framesPaths = await extractFrames(videoPath, framesDir);
     console.log(`Extracted ${framesPaths.length} frames from video`);
     tempFiles.push(...framesPaths);
-    
-    // 3. Extract audio and transcribe
-    const audioPath = path.join(processingDir, 'audio.wav');
-    tempFiles.push(audioPath);
-    
-    console.log('Extracting audio from video...');
-    await extractAudio(videoPath, audioPath);
-    console.log(`Audio extracted to: ${audioPath}`);
     
     // Choose one transcription method based on environment setup:
     let transcript;
@@ -439,6 +436,29 @@ app.post('/api/process-video', upload.single('video'), async (req, res) => {
   }
 });
 
+export function getVideoDuration(videoPath) {
+  if (cache.has(videoPath)) return cache.get(videoPath);
+
+  const { status, stdout, stderr } = spawnSync(
+    'ffprobe',
+    [
+      '-v', 'error',
+      '-select_streams', 'v:0',
+      '-show_entries', 'format=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1',
+      videoPath,
+    ],
+    { encoding: 'utf8' }
+  );
+  if (status !== 0) {
+    throw new Error(`ffprobe failed: ${stderr}`);
+  }
+  const dur = parseFloat(stdout);
+
+  cache.set(videoPath, dur);
+  return dur;
+}
+
 // Add a simple test endpoint
 app.get('/api/test', (req, res) => {
   res.json({
@@ -478,7 +498,7 @@ app.post('/api/process-chunk', upload.single('video'), async (req, res) => {
     console.log(`Created frames directory: ${framesDir}`);
     
     console.log('Extracting frames from video chunk...');
-    const framesPaths = await extractFrames(videoPath, framesDir, 9, startTime, endTime);
+    const framesPaths = await extractFrames(videoPath, framesDir, startTime, endTime);
     console.log(`Extracted ${framesPaths.length} frames from video chunk`);
     tempFiles.push(...framesPaths);
     
