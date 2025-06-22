@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 // Default configuration
 const defaultConfig = {
   url: "https://api.llama.com/v1/chat/completions",
-  api_key: process.env.LLAMA_API_KEY || "LLM|1354480252284946|bjdPaQpBbdb3tvhmMakySIe-kgA"
+  api_key: process.env.LLAMA_API_KEY || "YOUR_API_KEY"
 };
 
 // Load config from file if exists, otherwise use default
