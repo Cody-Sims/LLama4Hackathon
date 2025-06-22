@@ -125,7 +125,7 @@ const extractAudio = (videoPath, outputPath) => {
 const transcribeWithPython = (audioPath, modelSize = 'small') => {
   return new Promise((resolve, reject) => {
     // Use absolute path to the script
-    const scriptPath = path.resolve(path.join(__dirname, '..', 'transcribe', 'transcribe.py'));
+    const scriptPath = path.resolve(path.join(__dirname, '..', 'transcribe', 'transcribe_cpp.py'));
     console.log(`Using Python script at: ${scriptPath}`);
     
     // Check if the script exists
@@ -141,7 +141,6 @@ const transcribeWithPython = (audioPath, modelSize = 'small') => {
     const pythonProcess = spawn(pythonCommand, [
       scriptPath,
       audioPath,
-      '--model', modelSize
     ]);
     
     let transcript = '';
